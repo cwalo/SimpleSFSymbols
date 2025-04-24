@@ -39,7 +39,8 @@ func symbolsAndReleases(from plist: URL) -> ( [SymbolTuple],Releases) {
 struct GenerateSymbols {
     static func main() throws {
         let outputDirectory = CommandLine.arguments[1]
-        let outputPath = URL(fileURLWithPath: outputDirectory).appendingPathComponent("Symbols.generated.swift")
+        let outputAllSymbolsPath = URL(fileURLWithPath: outputDirectory).appendingPathComponent("SymbolLiterals.generated.swift")
+        let outputComponentsPath = URL(fileURLWithPath: outputDirectory).appendingPathComponent("Symbols.generated.swift")
         let plistPath = URL(fileURLWithPath: "/Applications/SF Symbols.app/Contents/Resources/Metadata/name_availability.plist")
         
         let (symbols, _) = symbolsAndReleases(from: plistPath)
@@ -59,25 +60,50 @@ struct GenerateSymbols {
             }
         }
         
-        let header = "// Generated symbols file\n//Re-regenerate from File > Packages > SymbolGeneratorPlugin\n"
-        let imports = "import Foundation\n"
-        let open = "extension Symbol {\n"
-        let close = "}"
-        var output = header + imports + open
-        
-        for symbol in numericSymbols {
-            let property = "num"+symbol
-            let accessor = "  public var \(property): Symbol { append(\"\(symbol)\") }\n"
-            output += accessor
+        // Create Symbol Literals
+        func writeSymbolLiterals() throws {
+            let header = "// Generated symbol literals file\n// Re-regenerate by right-clicking project in Xcode Navigator -> SymbolGeneratorPlugin -> Run\n"
+            let imports = "import Foundation\nimport SimpleSFSymbols\n\n"
+            let open = "extension Symbol {\n"
+            let setDefinition = "    public static let validSymbols: Set<String> = [\n"
+            let setDefinitionClose = "    ]\n"
+            let close = "}"
+            
+            var output = header + imports + open + setDefinition
+            
+            for symbol in symbols.map(\.symbol) {
+                output += "        \"\(symbol)\",\n"
+            }
+            
+            output += setDefinitionClose + close
+            try output.write(to: outputAllSymbolsPath, atomically: true, encoding: .utf8)
         }
         
-        for symbol in symbolSet {
-            let accessor = "  public var `\(symbol)`: Symbol { append(\"\(symbol)\") }\n"
-            output += accessor
+        // Create Component Accessors
+        func writeSymbolComponents() throws {
+            let header = "// Generated symbols file\n// Re-regenerate by right-clicking project in Xcode Navigator -> SymbolGeneratorPlugin -> Run\n"
+            let imports = "import Foundation\nimport SimpleSFSymbols\n\n"
+            let open = "extension Symbol {\n"
+            let close = "}"
+            var output = header + imports + open
+            
+            for symbol in numericSymbols {
+                let property = "num"+symbol
+                let accessor = "  public var \(property): Symbol { append(\"\(symbol)\") }\n"
+                output += accessor
+            }
+            
+            for symbol in symbolSet {
+                let accessor = "  public var `\(symbol)`: Symbol { append(\"\(symbol)\") }\n"
+                output += accessor
+            }
+            
+            output += close
+            
+            try output.write(to: outputComponentsPath, atomically: true, encoding: .utf8)
         }
         
-        output += close
-        
-        try output.write(to: outputPath, atomically: true, encoding: .utf8)
+        try writeSymbolLiterals()
+        try writeSymbolComponents()
     }
 }
